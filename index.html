@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<!--
+  한반도 프론트 (HanbandoFront.io)
+  OpenFront.io 의 "틱 기반 타일 점령 + 병력 밀도 전투" 구조를 참고해 새로 작성한 파생 작품입니다.
+  라이선스: AGPL-3.0-or-later (이 파일 자체가 전체 소스입니다)
+  사용법: 이 파일을 크롬/엣지/사파리에서 더블클릭으로 열면 바로 실행됩니다. (인터넷 불필요)
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>한반도 프론트 — 작전지도</title>
+<style>
+*{box-sizing:border-box}
+:root{--ink:#2b2418;--paper:#d6ccaa;--olive:#2d2f22;--olive2:#3a3c2c;--line:#6f6c4a}
+body{margin:0;background:var(--olive);color:var(--paper);font-family:'Batang','Nanum Myeongjo','Malgun Gothic',serif;height:100vh;display:flex;flex-direction:column;overflow:hidden;user-select:none}
+#hud{display:flex;gap:6px;padding:6px 8px;background:var(--olive);border-bottom:3px double var(--line);align-items:stretch;flex-wrap:wrap}
+.stat{background:var(--olive2);border:1px solid var(--line);padding:3px 8px;min-width:140px;flex:1}
+.stat small{display:block;color:#a8a07c;font-size:11px;line-height:1.3;letter-spacing:.5px}
+.stat b{font-size:18px;font-family:'Courier New','D2Coding',monospace;color:var(--paper)}
+.stat.bad{border-color:#8c342e;background:#3b2a24}
+.stat.bad b{color:#d98a7a}
+#badge{width:46px;height:46px;background:var(--olive2);border:1px solid var(--line)}
+#bar{height:8px;background:#222;display:flex;border-bottom:1px solid var(--line)}
+#bar div{height:100%}
+#main{flex:1;display:flex;min-height:0}
+.panel{background:var(--olive);padding:10px;font-size:13px;overflow-y:auto}
+#left{width:250px;border-right:3px double var(--line)}
+#right{width:240px;border-left:3px double var(--line)}
+.panel h3{margin:0 0 6px;font-size:13px;color:#c9bd8a;border-bottom:1px solid var(--line);padding-bottom:3px;letter-spacing:2px}
+.panel label{display:block;margin:8px 0 2px}
+.panel input[type=range]{width:100%;accent-color:#8a8a5a}
+button{background:#4a4b35;color:var(--paper);border:1px solid var(--line);border-radius:0;padding:5px 8px;cursor:pointer;font-family:inherit;font-size:13px;margin:2px 2px 2px 0}
+button:hover{background:#5a5b40}
+button.on{background:#6e2f28;border-color:#a0554a}
+#wrap{flex:1;position:relative;background:#b0b8aa}
+#cv{position:absolute;left:0;top:0;width:100%;height:100%;cursor:crosshair;touch-action:none}
+#tip{position:fixed;pointer-events:none;background:#d6ccaa;color:#2b2418;border:1px solid #2b2418;padding:3px 7px;font-size:12px;display:none;z-index:5}
+#log div{margin:2px 0;font-size:12px;line-height:1.35}
+.bad{color:#d98a7a}.good{color:#a9c48a}.info{color:#cfc7a8}
+.ov{position:fixed;inset:0;background:#1b1c14;display:flex;align-items:center;justify-content:center;z-index:10;text-align:center}
+.ov .box{max-width:560px;padding:24px;border:3px double var(--line);background:var(--olive)}
+.ov h1{margin:0 0 4px;font-size:32px;letter-spacing:6px;font-weight:bold;color:var(--paper)}
+.ov p{color:#b8b090;line-height:1.6;font-size:14px}
+.ov button{font-size:16px;padding:9px 16px}
+.ov ul{text-align:left;color:#b8b090;font-size:13px;line-height:1.6}
+select{background:#4a4b35;color:var(--paper);border:1px solid var(--line);padding:5px;border-radius:0;font-size:14px;font-family:inherit}
+#hud,#bar,#main{transition:filter 3.5s}
+body.fin #hud,body.fin #bar,body.fin #main{filter:grayscale(1) sepia(.25) brightness(.5) contrast(.9)}
+#over{display:none;position:fixed;inset:0;z-index:20;align-items:center;justify-content:center;background:rgba(0,0,0,0);transition:background 4s;overflow-y:auto}
+#over.show{background:rgba(4,4,3,.94)}
+#over::before{content:'';position:fixed;inset:0;box-shadow:inset 0 0 220px 90px #000;pointer-events:none}
+#endBox{position:relative;max-width:620px;margin:auto;padding:28px 26px;text-align:center;color:#cfcab8}
+#endBox .f{opacity:0;animation:fi 2.4s forwards}
+@keyframes fi{to{opacity:1}}
+#endBox h1{font-size:30px;letter-spacing:4px;margin:6px 0;color:#e6e1d0}
+#eKick{letter-spacing:5px;font-size:12px;color:#8d8a78}
+#eSub{font-style:italic;color:#aaa592;margin-bottom:14px}
+#eBody p{line-height:1.9;font-size:14px;color:#bdb8a4;margin:10px 0}
+#eStat{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;text-align:left;font-size:13px;margin:16px auto;max-width:460px;border-top:1px solid #4a4838;border-bottom:1px solid #4a4838;padding:10px 0}
+#eStat span:nth-child(even){text-align:right;font-family:'Courier New',monospace;color:#e6e1d0}
+#eScore{margin:6px 0 14px;font-size:13px;color:#a8a48f}
+#eScore b{display:block;font-size:36px;font-family:'Courier New',monospace;color:#f0ead6}
+@media(max-width:900px){#right{display:none}#left{width:200px}}
+</style>
+</head>
+<body>
+<div id="hud">
+  <canvas id="badge" width="46" height="46"></canvas>
+  <div class="stat" id="stPop"><small>인구 (징집 대상)</small><b id="sPop"></b><small id="sPopR"></small></div>
+  <div class="stat" id="stTroop"><small>징집 병력</small><b id="sTroop"></b><small id="sTroopR"></small></div>
+  <div class="stat" id="stFood"><small>식량</small><b id="sFood"></b><small id="sFoodR"></small></div>
+  <div class="stat" id="stMun"><small>군수물자</small><b id="sMun"></b><small id="sMunR"></small></div>
+  <div class="stat" id="stDev"><small>지역 황폐도</small><b id="sDev"></b><small id="sDevR"></small></div>
+</div>
+<div id="bar"><div id="bS" style="background:#3b82f6"></div><div id="bN" style="background:#ef4444"></div></div>
+<div id="main">
+  <div id="left" class="panel">
+    <h3>작전 지휘</h3>
+    <label>공격 병력 비율: <b id="vRatio">50</b>% <span id="vRatioN" style="color:#8aa0b8"></span></label>
+    <input type="range" id="rRatio" min="5" max="100" value="50">
+    <label>징집 정책: <b id="vDraft">40</b>%</label>
+    <input type="range" id="rDraft" min="0" max="100" value="40">
+    <div style="margin-top:8px">
+      <button id="bRetreat">전군 후퇴</button>
+      <button id="bMobil">총동원령</button>
+      <button id="bRation">배급제</button>
+      <br><button id="bBuild">기지 건설 (B)</button><button id="bMissile">미사일 설치대 (M)</button><button id="bPlant">도시 화력소 (P)</button><br><button id="bStrike">정밀 타격 (F)</button><button id="bAuto" class="on">자동사격 ON</button>
+      <div id="baseInfo" style="margin-top:6px;font-size:12px;color:#a8a07c;line-height:1.5"></div>
+    </div>
+    <h3 style="margin-top:12px">시간</h3>
+    <button id="bPause">일시정지</button>
+    <button class="sp" data-s="1">1x</button><button class="sp" data-s="2">2x</button><button class="sp" data-s="4">4x</button>
+    <h3 style="margin-top:12px">도움말</h3>
+    <div style="color:#9fb3c8;line-height:1.5;font-size:12px">
+      • <b>적 영토를 클릭</b>하면 그 지점을 향해 공격합니다.<br>
+      • 마우스 휠: 확대/축소, 드래그: 이동<br>
+      • 스페이스바: 일시정지, B: 기지 건설 모드<br>      • <b>군사 기지</b>는 완공되면 주변 전선의 진격 속도가 빨라지고 점령 비용이 줄어듭니다. 적 기지는 전선이 밀고 들어가 점령·파괴할 수 있습니다.<br>      • 황폐한 땅에서는 기지 공사가 느리고 비용이 더 듭니다. 기지와 전선 유지에는 인구가 소모됩니다.<br>
+      • <b>미사일 설치대</b>(군수 500·인구 9만, 후방 전용)는 주기적으로 적 시설·도시를 폭격해 영토를 초토화하고 황폐도를 폭증시킵니다. F키로 직접 조준할 수 있습니다.<br>• <b>도시 화력소</b>(식량 450·인구 7만)는 식량·군수 생산을 크게 늘립니다. 초토화된 땅은 인접한 쪽이 되찾습니다.<br>• 지배율 80% 돌파, 영토·인구 붕괴, 자원 고갈 시 작전이 종료됩니다.<br>• 병력을 전부 쏟아부으면 반격에 뚫립니다. 예비대를 남기세요.<br>
+      • 전선 지역은 황폐해져 식량·군수 생산이 폭락합니다.<br>
+      • 식량이 바닥나면 기근으로 인구와 병력이 무너집니다.
+    </div>
+  </div>
+  <div id="wrap"><canvas id="cv"></canvas></div>
+  <div id="right" class="panel">
+    <h3>전황</h3>
+    <div id="enemy" style="line-height:1.7"></div>
+    <h3 style="margin-top:12px">전황 일지</h3>
+    <div id="log"></div>
+  </div>
+</div>
+<div id="tip"></div>
+
+<div class="ov" id="start">
+  <div class="box">
+    <h1>한반도 프론트</h1>
+    <p>1950년, 38선에서 시작된 참혹한 전쟁.<br>영토를 점령하고, 인구를 징집하고, 식량과 군수물자를 지켜내십시오.<br>전선이 되는 땅은 황폐해지고, 황폐해진 땅은 아무것도 내주지 않습니다.</p>
+    <p>
+      <button id="pickS" style="border-color:#3b82f6">남한(청색)으로 시작</button>
+      <button id="pickN" style="border-color:#ef4444">★ 북한(적색)으로 시작</button>
+    </p>
+    <p>AI 난이도: <select id="diff"><option value="easy">쉬움</option><option value="normal" selected>보통</option><option value="hard">어려움</option></select></p>
+    <ul>
+      <li>시작 병력은 남한 13만, 북한 17만. 남한은 인구가 2배라 장기전에 유리하고, 북한은 초반 병력이 앞섭니다.</li>
+      <li>군수물자·인구·병력을 들여 기지를 지으면 그 일대의 진격이 빨라집니다. 단, 폐허가 된 땅에서는 더디고 비쌉니다.</li>
+      <li>서울·평양 같은 도시는 군수물자를 많이 생산합니다. 수도가 함락되면 병력과 인구가 크게 흔들립니다.</li>
+      <li>승리: 영토 지배율 80% 돌파, 상대 영토 소멸, 인구 붕괴, 자원 고갈 중 하나로 작전이 끝납니다.</li><li>미사일 설치대와 도시 화력소를 후방에 지어 전쟁 경제를 키우십시오. 어떤 결말이든, 끝에는 대가가 기다립니다.</li>
+    </ul>
+  </div>
+</div>
+<div id="over"><div id="endBox"><canvas id="flower" class="f" width="110" height="110" style="animation-delay:.3s"></canvas><div id="eKick" class="f" style="animation-delay:.8s"></div><h1 id="oTitle" class="f" style="animation-delay:1.8s"></h1><div id="eSub" class="f" style="animation-delay:3.2s"></div><div id="eBody"></div><div id="eStat" class="f" style="animation-delay:14s"></div><div id="eScore" class="f" style="animation-delay:15.5s">최종 점수<b id="eNum">0</b><span id="eGrade"></span></div><button class="f" style="animation-delay:7s" onclick="location.reload()">다시 시작</button></div></div>
+
+<script>
+(()=>{
+'use strict';
+/* ===================== 상수 / 지도 데이터 ===================== */
+const W=106,H=200,BS=10,BW=Math.ceil(W/BS),BH=Math.ceil(H/BS);
+const LON0=124.2,LAT0=43.0,KX=15.8,KY=20;
+const px=lo=>(lo-LON0)*KX, py=la=>(LAT0-la)*KY;
+const OUT=[[124.35,39.95],[124.6,40.05],[124.9,40.4],[125.3,40.6],[125.7,40.85],[126.0,41.0],[126.4,41.35],[126.9,41.75],[127.2,41.45],[127.6,41.5],[128.0,41.95],[128.3,42.0],[128.6,42.4],[129.0,42.4],[129.4,42.4],[129.75,42.45],[130.1,42.9],[130.65,42.5],[130.4,42.2],[130.0,41.75],[129.7,41.2],[129.3,40.8],[129.0,40.45],[128.6,40.1],[128.2,39.85],[127.7,39.5],[127.45,39.15],[127.7,38.95],[128.0,38.75],[128.35,38.6],[128.6,38.2],[128.9,37.75],[129.15,37.45],[129.4,36.95],[129.4,36.05],[129.45,35.55],[129.2,35.2],[129.0,35.05],[128.7,35.0],[128.4,34.85],[127.95,34.75],[127.6,34.6],[127.3,34.45],[126.9,34.4],[126.5,34.3],[126.3,34.6],[126.35,35.0],[126.5,35.3],[126.65,35.65],[126.55,35.95],[126.4,36.4],[126.15,36.75],[126.5,36.9],[126.6,37.2],[126.6,37.45],[126.4,37.7],[126.7,37.78],[126.55,38.0],[125.7,37.95],[125.2,37.65],[125.05,37.9],[125.3,38.35],[125.2,38.6],[125.4,38.75],[125.15,39.0],[125.1,39.4],[124.75,39.6],[124.4,39.75]];
+const JEJU=[[126.15,33.4],[126.45,33.55],[126.9,33.5],[126.9,33.3],[126.5,33.2],[126.2,33.25]];
+const CITIES=[
+ {n:'서울',lo:126.98,la:37.57,ind:3,cap:1},{n:'인천',lo:126.7,la:37.45,ind:1.4},{n:'부산',lo:129.07,la:35.18,ind:1.8},
+ {n:'대구',lo:128.6,la:35.87,ind:1},{n:'대전',lo:127.4,la:36.35,ind:.8},{n:'광주',lo:126.85,la:35.16,ind:.6},
+ {n:'춘천',lo:127.73,la:37.88,ind:.3},{n:'개성',lo:126.55,la:37.97,ind:.4},
+ {n:'평양',lo:125.75,la:39.02,ind:2.4,cap:1},{n:'함흥',lo:127.55,la:39.9,ind:2},{n:'청진',lo:129.8,la:41.8,ind:1.4},
+ {n:'원산',lo:127.45,la:39.15,ind:1},{n:'해주',lo:125.7,la:38.05,ind:.5},{n:'신의주',lo:124.4,la:40.1,ind:.8}
+];
+const KF=0.006,KM=0.0015;
+const CFG={easy:{interval:70,ratio:.28,prod:.9,draft:.45},normal:{interval:45,ratio:.38,prod:1,draft:.6},hard:{interval:28,ratio:.5,prod:1.25,draft:.8}};
+const BASE=[[118,110,94],[88,116,148],[140,52,46]],ASH=[70,62,52];
+
+/* ===================== 전역 상태 ===================== */
+const $=id=>document.getElementById(id);
+const land=new Uint8Array(W*H),owner=new Uint8Array(W*H),terr=new Uint8Array(W*H);
+const fert=new Float32Array(W*H),shade=new Float32Array(W*H),blk=new Uint16Array(W*H);
+const dev=new Float32Array(BW*BH),front=new Uint8Array(BW*BH);
+const cityAt=new Int16Array(W*H).fill(-1);
+let P=[null,null,null],human=1,ai=2,cfg=CFG.normal;
+let attacks=[],particles=[],bases=[],buildMode=false,nextBaseId=1,logs=[],tickN=0,speed=1,paused=false,running=false,over=false,dirty=true;
+let st,jeju=0,landN=0,capIdx=[0,0,0],lastAlert=-999,autoFire=true,strikeMode=false,shots=[],blasts=[];
+
+/* ===================== 지도 생성 ===================== */
+function hash(x,y){let h=(Math.imul(x|0,374761393)+Math.imul(y|0,668265263))|0;h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;}
+function vnoise(x,y,s){const xi=Math.floor(x/s),yi=Math.floor(y/s),fx=x/s-xi,fy=y/s-yi;const a=hash(xi,yi),b=hash(xi+1,yi),c=hash(xi,yi+1),d=hash(xi+1,yi+1);const u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;}
+function nearestLand(x,y){x=Math.round(x);y=Math.round(y);for(let r=0;r<14;r++)for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){if(Math.max(Math.abs(dx),Math.abs(dy))!==r)continue;const xx=x+dx,yy=y+dy;if(xx>=0&&yy>=0&&xx<W&&yy<H&&land[yy*W+xx])return yy*W+xx;}return -1;}
+function buildMap(){
+  const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+  g.fillStyle='#fff';
+  for(const poly of [OUT,JEJU]){g.beginPath();poly.forEach(([lo,la],i)=>{const x=px(lo),y=py(la);i?g.lineTo(x,y):g.moveTo(x,y);});g.closePath();g.fill();}
+  const d=g.getImageData(0,0,W,H).data;
+  for(let i=0;i<W*H;i++){land[i]=d[i*4+3]>110?1:0;landN+=land[i];}
+  for(let i=0;i<W*H;i++){
+    const x=i%W,y=(i/W)|0;blk[i]=((y/BS)|0)*BW+((x/BS)|0);
+    shade[i]=0.88+hash(x*7,y*13)*0.2;
+    if(!land[i])continue;
+    const lo=LON0+x/KX,la=LAT0-y/KY;
+    const n=vnoise(x,y,9)*0.6+vnoise(x,y,4)*0.4;
+    const ridge=la<38.6&&la>35.6&&Math.abs(lo-(128.75+(38.2-la)*0.28))<0.4;
+    const north=la>39.6&&lo>126.4&&la<41.8&&lo<129.4;
+    const central=lo>127.2&&la>38.4&&la<39.6;
+    const mount=ridge||(north&&n>0.38)||(central&&n>0.4)||n>0.72;
+    terr[i]=mount?1:0;
+    let f=0.5+(lo<127.3?0.35:0)+(la<36.5&&lo<127.4?0.1:0);
+    if(mount)f=0.2;
+    fert[i]=Math.min(1,f)*(0.8+n*0.4);
+    if(y>=185)jeju++;
+  }
+  CITIES.forEach((c,k)=>{c.idx=nearestLand(px(c.lo),py(c.la));cityAt[c.idx]=k;});
+  capIdx[1]=CITIES[0].idx;capIdx[2]=CITIES[8].idx;
+}
+
+/* ===================== 게임 초기화 ===================== */
+function mkPlayer(id,name,short,pop,troops,draft){
+  return {id,name,short,pop,popBase:pop,prevPop:pop,troops,food:3000,mun:400,tiles:0,draft,
+    mobil:false,ration:false,starving:false,rF:0,rM:0,avgDev:0,maxDev:0,prodMul:1,dPop:0,exh:0};
+}
+function newGame(side,diff){
+  human=side;ai=3-side;cfg=CFG[diff];
+  for(let i=0;i<W*H;i++)owner[i]=land[i]?(((i/W)|0)>=100?1:2):0;
+  dev.fill(0);
+  P[1]=mkPlayer(1,'대한민국','남한',20000,130,0.4);
+  P[2]=mkPlayer(2,'조선민주주의인민공화국','북한',9600,170,0.5);
+  P[ai].prodMul=cfg.prod;P[ai].draft=cfg.draft;P[human].draft=0.4;
+  for(let i=0;i<W*H;i++)if(owner[i])P[owner[i]].tiles++;
+  attacks=[];particles=[];bases=[];shots=[];blasts=[];buildMode=false;strikeMode=false;buildType='base';document.body.classList.remove('fin');$('over').style.display='none';$('over').classList.remove('show');$('bStrike').classList.remove('on');$('bMissile').classList.remove('on');$('bPlant').classList.remove('on');$('bBuild').classList.remove('on');logs=[];tickN=0;over=false;paused=false;
+  st={mil:[0,0,0],civ:[0,0,0],shots:[0,0,0],built:[0,0,0]};
+  $('rDraft').value=40;$('vDraft').textContent=40;
+  pushLog(`${P[human].short}군 총사령관으로 취임했다. 38선에서 전운이 감돈다.`,'info');
+  drawBadge();dirty=true;
+}
+
+/* ===================== 유틸 ===================== */
+const fmt=n=>Math.round(n).toLocaleString('ko-KR');
+const sgn=v=>(v>=0?'+':'')+v.toFixed(1)+'/초';
+function totalTroops(p){let t=p.troops;for(const a of attacks)if(a.a===p.id)t+=a.troops;return t;}
+function eff(o){return P[o].tiles-(o===1?jeju:0);}
+function touch(i,o){const x=i%W;return(x>0&&owner[i-1]===o)||(x<W-1&&owner[i+1]===o)||(i>=W&&owner[i-W]===o)||(i<W*(H-1)&&owner[i+W]===o);}
+function nCount(i,o){const x=i%W;let c=0;if(x>0&&owner[i-1]===o)c++;if(x<W-1&&owner[i+1]===o)c++;if(i>=W&&owner[i-W]===o)c++;if(i<W*(H-1)&&owner[i+W]===o)c++;return c;}
+function pushLog(t,c){logs.push({t,c});if(logs.length>40)logs.shift();const el=$('log');el.innerHTML=logs.slice(-9).reverse().map(l=>`<div class="${l.c}">${l.t}</div>`).join('');}
+
+/* ===================== 군사 기지 ===================== */
+const BASE_MAX=6,BASE_R=26,BASE_SPACING=7;
+const NAME={base:'군사 기지',missile:'미사일 설치대',plant:'도시 화력소'},DESC={base:'주변 진격 속도가 빨라진다.',missile:'장전을 마치면 적 후방을 폭격한다.',plant:'군수·식량 생산이 크게 늘어난다.'};
+const LIM={base:6,missile:2,plant:2},UPK={base:.4,missile:1,plant:.3},MR_RANGE=80,BLAST=7,MCOST=80;
+function baseCost(i,t){const d=dev[blk[i]]/100;
+ if(t==='missile')return{mun:500*(1+d),food:0,pop:90*(1+d*.5),time:180*(1+d*2),tr:12};
+ if(t==='plant')return{mun:0,food:450*(1+d),pop:70*(1+d*.5),time:150*(1+d*2),tr:8};
+ return{mun:120*(1+d),food:0,pop:30*(1+d*0.5),time:100*(1+d*2),tr:6};}
+function plantBonus(o){let v=0;for(const b of bases)if(b.o===o&&b.t==='plant'&&b.prog>=1)v+=0.4*(0.5+b.hp/200);return v;}
+function basesOf(o){return bases.filter(b=>b.o===o);}
+function nearBase(i,o,r,doneOnly){const x=i%W,y=(i/W)|0;for(const b of bases){if(b.o!==o||b.t!=='base'||(doneOnly&&b.prog<1))continue;if(Math.hypot(x-b.x,y-b.y)<=r)return true;}return false;}
+let buildType='base';
+function buildBase(o,x,y,quiet,t){
+  t=t||'base';const i=y*W+x,p=P[o],say=(m)=>{if(!quiet&&o===human)pushLog(m,'bad');return false;};
+  if(!land[i]||owner[i]!==o)return say('아군 영토에만 건설할 수 있다.');
+  if(bases.filter(b=>b.o===o&&b.t===t).length>=LIM[t])return say(`${NAME[t]}은(는) 최대 ${LIM[t]}개까지 유지할 수 있다.`);
+  for(const b of bases)if(b.o===o&&Math.hypot(b.x-x,b.y-y)<BASE_SPACING)return say('기존 시설과 너무 가깝다.');
+  if(t!=='base'&&front[blk[i]])return say(`${NAME[t]}은(는) 전선 지대에 지을 수 없다. 후방에 건설하십시오.`);
+  const c=baseCost(i,t);
+  if(p.mun<c.mun)return say(`군수물자 부족 (필요 ${fmt(c.mun)})`);
+  if(p.food<c.food+300)return say(`식량 부족 (필요 ${fmt(c.food+300)})`);
+  if(p.pop<c.pop+300)return say('인구가 부족하여 공사 인력을 모을 수 없다.');
+  if(p.troops<c.tr+4)return say('공사를 맡을 병력이 부족하다.');
+  p.mun-=c.mun;p.food-=c.food;p.pop-=c.pop;p.troops-=c.tr;st.civ[o]+=c.pop;st.built[o]++;
+  bases.push({id:nextBaseId++,o,x,y,i,t,hp:100,prog:0,time:c.time,cd:600});
+  if(o===human)pushLog(`${NAME[t]} 건설 착수: 군수 ${fmt(c.mun)}, 식량 ${fmt(c.food)}, 인구 ${(c.pop/10).toFixed(1)}만 소모${dev[blk[i]]>40?' (황폐 지역이라 공사가 더디다)':''}`,'info');
+  dirty=true;return true;
+}
+function setBuild(v,t){buildType=t||'base';buildMode=v;if(v)setStrike(false);
+  ['bBuild','bMissile','bPlant'].forEach(id=>$(id).classList.remove('on'));
+  if(v)$({base:'bBuild',missile:'bMissile',plant:'bPlant'}[buildType]).classList.add('on');
+  $('cv').style.cursor=v?'cell':'crosshair';if(v)pushLog(`${NAME[buildType]}을(를) 건설할 아군 영토를 클릭하십시오. (Esc: 취소)`,'info');}
+function setStrike(v){strikeMode=v;$('bStrike').classList.toggle('on',v);if(v&&buildMode)setBuild(false);if(v)pushLog('타격할 적 영토를 클릭하십시오. (장전된 미사일 설치대 사용)','info');}
+function updateBaseInfo(){
+  const p=P[human],mine=basesOf(human),cnt=t=>mine.filter(b=>b.t===t),dn=t=>cnt(t).filter(b=>b.prog>=1).length,d=1+p.avgDev/100;
+  const rdy=cnt('missile').filter(b=>b.prog>=1&&b.cd<=0).length;
+  $('baseInfo').innerHTML=`군사 기지 ${cnt('base').length}/${LIM.base} (가동 ${dn('base')})<br>건설비: 군수 ${fmt(120*d)} · 인구 3만<br>`+
+   `미사일 설치대 ${cnt('missile').length}/${LIM.missile} (장전 ${rdy})<br>건설비: 군수 ${fmt(500*d)} · 인구 ${(90*(1+p.avgDev/200)/10).toFixed(1)}만 · 후방 전용<br>`+
+   `도시 화력소 ${cnt('plant').length}/${LIM.plant} (가동 ${dn('plant')})<br>건설비: 식량 ${fmt(450*d)} · 인구 ${(70*(1+p.avgDev/200)/10).toFixed(1)}만 · 생산 +${(plantBonus(human)*100)|0}%`+
+   (p.avgDev>35?'<br><span class="bad">황폐 지역은 공사가 더디고 비용이 더 든다.</span>':'');
+}
+
+/* ===================== 미사일 / 초토화 / 후방 복구 ===================== */
+function pickTarget(b){
+  const d=3-b.o,c=[],inR=(x,y)=>Math.hypot(x-b.x,y-b.y)<=MR_RANGE;
+  for(const q of bases)if(q.o===d&&inR(q.x,q.y))c.push([q.x,q.y,q.t==='missile'?5:q.t==='plant'?4:3]);
+  for(const ct of CITIES){const i=ct.idx;if(owner[i]===d&&inR(i%W,(i/W)|0))c.push([i%W,(i/W)|0,ct.cap?4:ct.ind>1.5?3:1]);}
+  for(let n=0;n<60;n++){const i=(Math.random()*W*H)|0;if(land[i]&&owner[i]===d&&inR(i%W,(i/W)|0)){c.push([i%W,(i/W)|0,1.5]);break;}}
+  if(!c.length)return null;
+  let t=0;for(const q of c)t+=q[2];let r=Math.random()*t;for(const q of c){r-=q[2];if(r<=0)return q;}return c[0];
+}
+function fire(b,tx,ty){
+  const p=P[b.o];p.mun-=MCOST;b.cd=Math.round(300*(b.o===human?1:(cfg.interval<40?.8:1.1)));st.shots[b.o]++;
+  shots.push({o:b.o,fx:b.x,fy:b.y,tx,ty,t:0,dur:Math.max(10,(Math.hypot(tx-b.x,ty-b.y)*0.35)|0)});
+  pushLog(b.o===human?'미사일 발사! 적 후방을 향해 날아간다.':'적 미사일 발사 경보! 아군 영토에 탄착이 임박했다.',b.o===human?'good':'bad');
+}
+function manualStrike(tx,ty){
+  const i=ty*W+tx;if(!land[i]||owner[i]!==ai){pushLog('적 영토를 지정해야 한다.','info');return;}
+  const r=bases.find(b=>b.o===human&&b.t==='missile'&&b.prog>=1&&b.cd<=0&&Math.hypot(b.x-tx,b.y-ty)<=MR_RANGE);
+  if(!r){pushLog('장전된 미사일 설치대가 없거나 사거리 밖이다.','bad');return;}
+  if(P[human].mun<MCOST){pushLog('군수물자가 부족하다.','bad');return;}
+  fire(r,tx,ty);setStrike(false);
+}
+function detonate(s){
+  const o=3-s.o,D=P[o],tp=D.tiles>0?D.pop/D.tiles:0,bs=new Set();let n=0;
+  for(let y=Math.max(0,s.ty-BLAST);y<=Math.min(H-1,s.ty+BLAST);y++)for(let x=Math.max(0,s.tx-BLAST);x<=Math.min(W-1,s.tx+BLAST);x++){
+    if(Math.hypot(x-s.tx,y-s.ty)>BLAST)continue;const i=y*W+x;if(!land[i])continue;bs.add(blk[i]);
+    if(owner[i]===o){owner[i]=0;D.tiles--;n++;D.pop=Math.max(0,D.pop-tp*0.5);st.civ[o]+=tp*0.5;}
+  }
+  for(const b of bs)dev[b]=Math.min(100,dev[b]+30);
+  const tl=D.troops*0.05;D.troops-=tl;st.mil[o]+=tl;D.mun*=0.97;
+  for(let k=bases.length-1;k>=0;k--){const b=bases[k];if(b.o===o&&Math.hypot(b.x-s.tx,b.y-s.ty)<=BLAST+1){b.hp-=70;if(b.hp<=0){bases.splice(k,1);pushLog(`${o===human?'아군':'적'} ${NAME[b.t]}이(가) 폭격으로 파괴되었다.`,o===human?'bad':'good');}}}
+  for(const ct of CITIES)if(Math.hypot(ct.idx%W-s.tx,((ct.idx/W)|0)-s.ty)<=BLAST&&ct.cap){D.troops*=0.95;D.pop*=0.97;pushLog(`수도 ${ct.n}에 폭격! ${D.short}군이 큰 혼란에 빠졌다.`,o===human?'bad':'good');}
+  blasts.push({x:s.tx,y:s.ty,l:1});
+  for(let k=0;k<40&&particles.length<500;k++)particles.push({x:s.tx+Math.round((Math.random()*2-1)*BLAST*.8),y:s.ty+Math.round((Math.random()*2-1)*BLAST*.8),l:1});
+  pushLog(`${s.o===human?'아군':'적'} 미사일 탄착! 영토 ${n}칸이 초토화되었다.`,s.o===human?'good':'bad');
+  dirty=true;if(eff(o)<=0)endGame(s.o,'영토 소멸');
+}
+function stepMissiles(){
+  if(over)return;
+  for(const b of bases){
+    if(b.t!=='missile'||b.prog<1)continue;
+    if(b.cd>0)b.cd--;
+    if(b.cd<=0&&(b.o!==human||autoFire)&&P[b.o].mun>=MCOST+100){const t=pickTarget(b);if(t)fire(b,t[0],t[1]);else b.cd=50;}
+  }
+  for(let k=shots.length-1;k>=0;k--){const q=shots[k];q.t++;if(q.t>=q.dur){shots.splice(k,1);detonate(q);if(over)return;}}
+  for(let k=blasts.length-1;k>=0;k--){blasts[k].l-=0.04;if(blasts[k].l<=0)blasts.splice(k,1);}
+}
+function reclaim(){
+  for(let i=0;i<W*H;i++){if(!land[i]||owner[i]||Math.random()>.3)continue;
+    const a=nCount(i,1),b=nCount(i,2);if(!a&&!b)continue;
+    const o=a===b?(Math.random()<.5?1:2):(a>b?1:2);owner[i]=o;P[o].tiles++;}
+  dirty=true;
+}
+function aiSpecial(p){
+  const has=t=>bases.filter(b=>b.o===ai&&b.t===t).length,hard=cfg.interval<40;
+  const tryB=t=>{for(let n=0;n<60;n++){const i=(Math.random()*W*H)|0;if(land[i]&&owner[i]===ai&&buildBase(ai,i%W,(i/W)|0,true,t))return;}};
+  if(Math.random()<.5)return;
+  if(has('plant')<(hard?2:1)&&p.food>900&&p.pop>p.popBase*.5)tryB('plant');
+  else if(cfg.interval<70&&has('missile')<(hard?2:1)&&p.mun>800&&p.pop>p.popBase*.5&&bases.some(b=>b.o===ai&&b.t==='base'&&b.prog>=1))tryB('missile');
+}
+
+/* ===================== 점령 / 전투 (틱 루프) ===================== */
+function conquer(att,def,i){
+  const A=P[att],D=P[def];
+  const tp=D.tiles>0?D.pop/D.tiles:0;
+  owner[i]=att;A.tiles++;D.tiles--;
+  D.pop-=tp;A.pop+=tp*0.4;st.civ[def]+=tp*0.6;
+  const b=blk[i];dev[b]=Math.min(100,dev[b]+0.5);
+  if(particles.length<500)particles.push({x:i%W,y:(i/W)|0,l:1});
+  const ci=cityAt[i];
+  if(ci>=0){
+    const c=CITIES[ci];
+    const lootF=D.food*0.1,lootM=D.mun*0.1;D.food-=lootF;D.mun-=lootM;A.food+=lootF;A.mun+=lootM;
+    if(c.cap){D.troops*=0.7;D.pop*=0.95;pushLog(`수도 ${c.n} 함락! ${A.short}군이 점령했다. (${D.short}군 병력·인구 급감)`,att===human?'good':'bad');}
+    else pushLog(`${c.n} ${att===human?'점령':'함락'}! (${A.short}군, 물자 일부 노획)`,att===human?'good':'bad');
+  }
+  for(let k=bases.length-1;k>=0;k--){
+    const b=bases[k];if(b.o!==def)continue;
+    if(b.i===i){
+      if(Math.random()<0.4){bases.splice(k,1);pushLog(`${def===human?'아군':'적'} 기지가 파괴되었다.`,def===human?'bad':'good');}
+      else{b.o=att;b.hp=40;b.cd=600;pushLog(att===human?'적 기지를 점령했다! (노획)':'아군 기지가 적에게 넘어갔다.',att===human?'good':'bad');}
+    }else if(Math.hypot(b.x-(i%W),b.y-((i/W)|0))<=4){
+      b.hp-=1.5;if(b.hp<=0){bases.splice(k,1);pushLog(`${def===human?'아군':'적'} 기지가 포격으로 무너졌다.`,def===human?'bad':'good');}
+    }
+  }
+  dirty=true;
+  if(eff(def)<=0)endGame(att,'영토 점령');
+}
+function rebuildFrontier(atk){const s=atk.frontier;s.clear();for(let i=0;i<W*H;i++){if(owner[i]===atk.b&&touch(i,atk.a))s.add(i);}}
+function endAttack(atk,refund){
+  const k=attacks.indexOf(atk);if(k<0)return;
+  attacks.splice(k,1);
+  P[atk.a].troops+=atk.troops*refund;st.mil[atk.a]+=atk.troops*(1-refund);
+}
+function stepAttack(atk){
+  if(over)return;
+  if(tickN%5===0||atk.frontier.size===0)rebuildFrontier(atk);
+  const A=P[atk.a],D=P[atk.b];
+  if(atk.frontier.size===0){endAttack(atk,1);if(atk.a===human)pushLog('더 이상 진격할 전선이 없어 공격이 종료되었다.','info');return;}
+  if(atk.focus&&owner[atk.focus[1]*W+atk.focus[0]]===atk.a)atk.focus=null;
+  const dens=D.tiles>0?D.troops/D.tiles:0;
+  const arr=[...atk.frontier],sc=new Map();
+  let boost=1;
+  const stride=Math.max(1,(arr.length/40)|0);
+  for(const b of bases){
+    if(b.o!==atk.a||b.t!=='base'||b.prog<1)continue;
+    let md=1e9;
+    for(let q=0;q<arr.length;q+=stride){const t=arr[q];const d=Math.hypot(t%W-b.x,((t/W)|0)-b.y);if(d<md)md=d;}
+    boost+=0.7*Math.max(0,1-md/BASE_R);
+  }
+  boost=Math.min(boost,2.4);
+  const k=Math.sqrt(atk.troops)*0.08*(A.mun>0?1:0.5)*boost;
+  const n=Math.floor(k)+(Math.random()<k%1?1:0);
+  if(n<=0)return;
+  for(const i of arr){
+    const x=i%W,y=(i/W)|0;
+    let s=Math.random()*6-nCount(i,atk.a)*2.5;
+    if(atk.focus)s+=Math.hypot(x-atk.focus[0],y-atk.focus[1])*0.3;
+    sc.set(i,s);
+  }
+  arr.sort((p,q)=>sc.get(p)-sc.get(q));
+  for(let j=0;j<Math.min(n,arr.length);j++){
+    const i=arr[j];
+    if(owner[i]!==atk.b){atk.frontier.delete(i);continue;}
+    const cost=(0.12+dens*3.0)*(terr[i]?1.4:1)*(A.mun>0?1:1.8)*(nearBase(i,atk.a,BASE_R,true)?0.85:1)*(nearBase(i,atk.b,12,true)?1.3:1);
+    if(atk.troops<cost){endAttack(atk,1);if(atk.a===human)pushLog('공격 병력이 소진되어 진격이 멈췄다.','info');return;}
+    atk.troops-=cost;st.mil[atk.a]+=cost;
+    const loss=Math.min(D.troops,0.02+dens*1.5);D.troops-=loss;st.mil[atk.b]+=loss;
+    A.mun=Math.max(0,A.mun-0.5);
+    conquer(atk.a,atk.b,i);
+    if(over)return;
+    atk.frontier.delete(i);
+    const x=i%W;
+    const nb=[x>0?i-1:-1,x<W-1?i+1:-1,i>=W?i-W:-1,i<W*(H-1)?i+W:-1];
+    for(const q of nb)if(q>=0&&owner[q]===atk.b)atk.frontier.add(q);
+  }
+  if(atk.troops<0.3)endAttack(atk,1);
+}
+function launchAttack(att,def,amount,focus){
+  const A=P[att];amount=Math.min(amount,A.troops);
+  if(amount<5){if(att===human)pushLog('투입할 병력이 부족하다.','bad');return false;}
+  A.troops-=amount;
+  const opp=attacks.find(t=>t.a===def&&t.b===att);
+  if(opp){
+    const c=Math.min(opp.troops,amount);opp.troops-=c;amount-=c;st.mil[att]+=c;st.mil[def]+=c;
+    if(opp.troops<0.3){attacks.splice(attacks.indexOf(opp),1);}
+    if(amount<0.5)return true;
+  }
+  let atk=attacks.find(t=>t.a===att&&t.b===def);
+  if(atk){atk.troops+=amount;if(focus)atk.focus=focus;}
+  else{atk={a:att,b:def,troops:amount,focus,frontier:new Set()};attacks.push(atk);rebuildFrontier(atk);
+    if(atk.frontier.size===0){endAttack(atk,1);if(att===human)pushLog('아군 영토와 맞닿은 적 영토가 아니다. (전선과 접촉해야 한다)','bad');return false;}}
+  if(att===human)pushLog(`공격 개시: 병력 ${(amount/10).toFixed(1)}만 투입`,'info');
+  else if(tickN-lastAlert>150){lastAlert=tickN;pushLog(`${P[att].short}군이 대규모 공세를 개시했다!`,'bad');}
+  return true;
+}
+function aiStep(){
+  if(tickN%cfg.interval)return;
+  const p=P[ai];
+  p.draft=p.starving?0.1:cfg.draft;
+  if(basesOf(ai).filter(b=>b.t==='base').length<(cfg.interval<40?4:3)&&p.mun>260&&p.pop>p.popBase*0.4&&Math.random()<0.5){
+    const fr=[];for(let i=0;i<W*H;i++)if(owner[i]===human&&touch(i,ai))fr.push(i);
+    if(fr.length){const t=fr[(Math.random()*fr.length)|0],tx=t%W,ty=(t/W)|0;
+      for(let tr=0;tr<12;tr++){const x=tx+((Math.random()*17)|0)-8,y=ty+((Math.random()*17)|0)-8;if(x>=0&&y>=0&&x<W&&y<H&&buildBase(ai,x,y,true))break;}}
+  }
+  aiSpecial(P[ai]);
+  if(attacks.some(t=>t.a===ai)&&Math.random()<0.5)return;
+  if(p.troops<20||p.mun<15)return;
+  const cand=[];
+  for(let i=0;i<W*H;i++)if(owner[i]===human&&touch(i,ai))cand.push(i);
+  if(!cand.length)return;
+  let t=cand[0];
+  if(Math.random()<0.5){
+    const cap=capIdx[human],cx=cap%W,cy=(cap/W)|0;let best=1e9;
+    for(const i of cand){const d=Math.hypot(i%W-cx,((i/W)|0)-cy);if(d<best){best=d;t=i;}}
+  }else t=cand[(Math.random()*cand.length)|0];
+  let ratio=cfg.ratio*(0.8+Math.random()*0.5);
+  if(p.troops<P[human].troops*0.5)ratio*=0.6;
+  ratio=Math.min(ratio,0.65);
+  launchAttack(ai,human,p.troops*ratio,[t%W,(t/W)|0]);
+}
+
+/* ===================== 경제 (1초마다) ===================== */
+function economy(){reclaim();
+  front.fill(0);
+  const pf=[0,0,0],pm=[0,0,0],ds=[0,0,0],cn=[0,0,0],mx=[0,0,0],fc=[0,0,0];
+  for(let i=0;i<W*H;i++){
+    if(!land[i])continue;
+    const o=owner[i],b=blk[i],x=i%W;let fr=false,q;
+    if(x>0){q=owner[i-1];if(q&&q!==o)fr=true;}
+    if(x<W-1){q=owner[i+1];if(q&&q!==o)fr=true;}
+    if(i>=W){q=owner[i-W];if(q&&q!==o)fr=true;}
+    if(i<W*(H-1)){q=owner[i+W];if(q&&q!==o)fr=true;}
+    if(fr){front[b]=1;fc[o]++;}
+    const m=1-dev[b]/100;
+    pf[o]+=fert[i]*m*KF;pm[o]+=m*KM;ds[o]+=dev[b];cn[o]++;if(dev[b]>mx[o])mx[o]=dev[b];
+  }
+  for(const c of CITIES){const o=owner[c.idx];pm[o]+=c.ind*1.2*(1-dev[blk[c.idx]]/100);}
+  for(let b=0;b<BW*BH;b++){
+    if(front[b])dev[b]=Math.min(100,dev[b]+0.5);
+    else if(dev[b]>0)dev[b]=Math.max(0,dev[b]-0.06);
+  }
+  for(let k=bases.length-1;k>=0;k--){
+    const b=bases[k];if(b.prog<1)continue;
+    const p=P[b.o],d=1+dev[blk[b.i]]/100,um=UPK[b.t]*d;
+    if(p.mun>=um)p.mun-=um;else b.hp-=3;
+    p.pop=Math.max(0,p.pop-0.08*d);
+    if(b.hp<=0){bases.splice(k,1);pushLog(`${b.o===human?'아군':'적'} 기지가 보급 부족으로 와해되었다.`,b.o===human?'bad':'good');}
+    else if(b.hp<100&&p.mun>50)b.hp=Math.min(100,b.hp+0.5);
+  }
+  for(const o of [1,2]){
+    const p=P[o];
+    p.avgDev=cn[o]?ds[o]/cn[o]:0;p.maxDev=mx[o];
+    const labor=Math.min(1.1,p.pop/p.popBase)*(p.ration?0.9:1);
+    const pmul=p.prodMul*(p.mobil?1.2:1)*(1+plantBonus(o));
+    const tt=totalTroops(p);
+    const eat=p.pop*0.0004*(p.ration?0.7:1)+tt*0.01;
+    p.rF=pf[o]*labor*pmul-eat;
+    p.rM=pm[o]*labor*pmul-tt*0.004;
+    p.food+=p.rF;p.mun=Math.max(0,p.mun+p.rM);
+    const wasStarving=p.starving;
+    p.starving=false;
+    if(p.food<=0){p.food=0;p.starving=true;p.pop*=0.997;p.troops*=0.996;}
+    if(p.starving&&!wasStarving)pushLog(`${p.short}에 기근 발생! 인구와 병력이 무너지기 시작한다.`,o===human?'bad':'good');
+    if(!p.starving&&!p.mobil)p.pop+=p.pop*0.0002*(1-p.avgDev/100)*(p.ration?0.6:1);
+    if(p.mobil)p.pop*=0.9998;
+    p.pop=Math.max(0,p.pop-fc[o]*0.008);st.civ[o]+=fc[o]*0.008;
+    const cap=p.pop*0.06;
+    let c=p.pop*0.0003*p.draft*(p.mobil?2:1);
+    c=Math.max(0,Math.min(c,cap-tt));p.pop-=c;p.troops+=c;
+    if(tt>cap)p.troops=Math.max(0,p.troops-Math.min(p.troops,(tt-cap)*0.03));
+    p.dPop=p.pop-p.prevPop;p.prevPop=p.pop;
+  }
+  for(const o of [1,2]){const p=P[o];if(over)break;
+    if(p.tiles/landN>=0.8){endGame(o,'지배율 80% 돌파');break;}
+    if(p.pop<300){endGame(3-o,'인구 붕괴');break;}
+    if(p.starving&&p.mun<2&&p.troops<3)p.exh++;else p.exh=Math.max(0,p.exh-1);
+    if(p.exh>=20){endGame(3-o,'자원 고갈');break;}}
+}
+function drawFlower(){
+  const g=$('flower').getContext('2d');g.clearRect(0,0,110,110);g.save();g.translate(55,55);
+  for(let k=0;k<3;k++){g.rotate(.26);for(let i=0;i<16;i++){g.rotate(Math.PI/8);g.beginPath();g.ellipse(0,-22,4.5,17-k*3,0,0,7);g.globalAlpha=.75;g.fillStyle=k?'#bdb8a4':'#e9e5d4';g.fill();g.strokeStyle='#6b6858';g.lineWidth=.6;g.stroke();}}
+  g.globalAlpha=1;g.beginPath();g.arc(0,0,5,0,7);g.fillStyle='#8d8a78';g.fill();g.restore();
+}
+function endGame(winner,reason){
+  if(over)return;over=true;setBuild(false);setStrike(false);$('tip').style.display='none';
+  document.body.classList.add('fin');
+  const win=winner===human,me=P[human],kind=/고갈|붕괴/.test(reason)?'c':'w';
+  const T={ww:['작전 종료 · 승전','이긴 자도 울었던 땅','깃발은 꽂혔으나, 돌아오지 못한 이름이 더 많았다.'],
+   wc:['작전 종료 · 폐허 위의 승리','남은 것은 잿더미뿐이었다','적도 아군도 굶주렸고, 승리는 허기를 채워주지 못했다.'],
+   lw:['작전 종료 · 전선 붕괴','무너진 전선, 남겨진 사람들','패배의 순간에도 고향에서는 누군가 가족을 기다리고 있었다.'],
+   lc:['작전 종료 · 굶주림의 겨울','텅 빈 곳간, 꺼진 불빛','총보다 먼저 쓰러진 것은 이 땅의 평범한 사람들이었다.']}[(win?'w':'l')+kind];
+  const share=me.tiles/landN,mins=Math.floor(tickN/600),secs=Math.floor(tickN/10)%60;
+  const score=Math.max(0,Math.round(share*4000+(me.food+me.mun*2)/4+me.pop/4+st.built[human]*150+(win?3000:0)-st.mil[human]*3-st.civ[human]*.5));
+  const grade=score<3000?'깊은 상흔':score<6000?'아물어 가는 땅':score<9000?'다시 피는 들꽃':'평화의 씨앗';
+  const yrs=Math.max(3,Math.round((P[1].avgDev+P[2].avgDev)/6+(st.civ[1]+st.civ[2])/1500));
+  const row=(a,b)=>`<span>${a}</span><span>${b}</span>`;
+  $('eKick').textContent=T[0];$('oTitle').textContent=T[1];$('eSub').textContent=T[2];
+  $('eBody').innerHTML=[
+   `1950년 6월 25일부터 1953년 7월 27일 휴전까지, 한반도는 같은 말을 쓰던 이들이 서로에게 총구를 겨눈 전장이었습니다. 이 지도 위의 한 칸마다 누군가의 고향과 이름이 있었습니다.`,
+   `전쟁은 총성이 멎은 뒤에도 끝나지 않았습니다. 불탄 들판을 다시 갈고, 끊어진 철길과 무너진 다리를 다시 이어야 했으며, 갈라진 가족의 그리움은 한 세대를 넘어 이어졌습니다. 이 땅을 일으켜 세우는 데에는 이 작전보다 훨씬 긴 시간(추정 약 ${yrs}년)이 필요했습니다.`,
+   `조국과 가족을 위해 싸우다 스러져 간 국군과 유엔 참전 용사, 명령에 따라 전선에 나섰던 북녘의 병사들, 이름 한 줄 남기지 못한 수많은 민간인을 고요히 기억합니다.`,
+   `평화는 승리의 다른 이름이 아닙니다. 다시는 이 지도를 펼치지 않겠다는, 살아남은 이들의 약속입니다.`
+  ].map((t,i)=>`<p class="f" style="animation-delay:${5+i*2.2}s">${t}</p>`).join('');
+  $('eStat').innerHTML=row('종결 사유',`${P[winner].short} · ${reason}`)+row('영토 점유 (남/북)',`${(P[1].tiles/landN*100).toFixed(1)}% / ${(P[2].tiles/landN*100).toFixed(1)}%`)+
+   row('군사 손실 (남/북)',`${fmt(st.mil[1]*100)} / ${fmt(st.mil[2]*100)}명`)+row('민간 피해 (남/북)',`${fmt(st.civ[1]/10)} / ${fmt(st.civ[2]/10)}만`)+
+   row('남은 인구',`${fmt(me.pop/10)}만 명`)+row('남은 식량 · 군수',`${fmt(me.food)} · ${fmt(me.mun)}`)+
+   row('건설한 시설',`${st.built[human]}동`)+row('발사한 미사일',`${st.shots[human]}발`)+row('작전 기간',`${mins}분 ${secs}초`);
+  $('eGrade').textContent=`「${grade}」`;
+  drawFlower();
+  setTimeout(()=>{const ov=$('over');ov.style.display='flex';requestAnimationFrame(()=>requestAnimationFrame(()=>ov.classList.add('show')));
+    setTimeout(()=>{let n=0;const iv=setInterval(()=>{n=Math.min(score,n+Math.ceil(score/60));$('eNum').textContent=fmt(n);if(n>=score)clearInterval(iv);},40);},15500);},1500);
+}
+function step(){
+  tickN++;
+  aiStep();
+  for(const a of attacks.slice())if(attacks.includes(a))stepAttack(a);
+  for(const b of bases)if(b.prog<1){b.prog=Math.min(1,b.prog+1/b.time);if(b.prog>=1)pushLog(b.o===human?`${NAME[b.t]} 건설 완료: ${DESC[b.t]}`:`적이 ${NAME[b.t]}을(를) 완공했다.`,b.o===human?'good':'bad');}
+  stepMissiles();if(tickN%10===0&&!over)economy();
+  dirty=true;
+}
+
+/* ===================== 렌더링 ===================== */
+const img=new ImageData(W,H),buf=new Uint32Array(img.data.buffer);
+const oc=document.createElement('canvas');oc.width=W;oc.height=H;const octx=oc.getContext('2d');
+const ctx=$('cv').getContext('2d');
+let cw=800,ch=600,view={s:3,ox:0,oy:0,fit:3};
+function paint(){
+  for(let i=0;i<W*H;i++){
+    const sh=shade[i];
+    if(!land[i]){{const w=0.97+(sh-0.88)*0.15;buf[i]=(255<<24)|(((172*w)|0)<<16)|(((184*w)|0)<<8)|((170*w)|0);continue;}}
+    const o=owner[i],base=BASE[o];
+    const m=dev[blk[i]]/100*0.8;
+    let k=sh*(terr[i]?0.8:1);
+    const x=i%W;
+    let fr=false,q;
+    if(x>0){q=owner[i-1];if(q&&q!==o)fr=true;}
+    if(x<W-1){q=owner[i+1];if(q&&q!==o)fr=true;}
+    if(i>=W){q=owner[i-W];if(q&&q!==o)fr=true;}
+    if(i<W*(H-1)){q=owner[i+W];if(q&&q!==o)fr=true;}
+    if(fr)k*=0.62;
+    const r=Math.min(255,(base[0]*(1-m)+ASH[0]*m)*k),g=Math.min(255,(base[1]*(1-m)+ASH[1]*m)*k),b=Math.min(255,(base[2]*(1-m)+ASH[2]*m)*k);
+    buf[i]=(255<<24)|((b|0)<<16)|((g|0)<<8)|(r|0);
+  }
+  octx.putImageData(img,0,0);
+}
+let lastR=0;
+function render(ts){
+  const dt=ts-lastR;lastR=ts;
+  ctx.fillStyle='#aab8ac';ctx.fillRect(0,0,cw,ch);
+  if(dirty){paint();dirty=false;}
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(oc,view.ox,view.oy,W*view.s,H*view.s);
+  const s=view.s;
+  ctx.save();ctx.strokeStyle='rgba(60,50,30,.16)';ctx.lineWidth=1;ctx.beginPath();for(let lo=125;lo<=130;lo++){const x=view.ox+px(lo)*s;ctx.moveTo(x,view.oy);ctx.lineTo(x,view.oy+H*s);}for(let la=34;la<=42;la++){const y=view.oy+py(la)*s;ctx.moveTo(view.ox,y);ctx.lineTo(view.ox+W*s,y);}ctx.stroke();ctx.restore();
+  ctx.save();ctx.setLineDash([6,5]);ctx.strokeStyle='rgba(40,32,20,.55)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(view.ox,view.oy+100*s);ctx.lineTo(view.ox+W*s,view.oy+100*s);ctx.stroke();ctx.restore();
+  ctx.fillStyle='rgba(40,32,20,.7)';ctx.font='10px serif';ctx.fillText('38°N',view.ox+4,view.oy+100*s-3);
+  for(const c of CITIES){
+    const cx=view.ox+(c.idx%W+0.5)*s,cy=view.oy+(((c.idx/W)|0)+0.5)*s;
+    const o=owner[c.idx];
+    ctx.beginPath();ctx.arc(cx,cy,c.cap?4:2.5,0,7);ctx.fillStyle='#e6dcc0';ctx.fill();
+    ctx.lineWidth=1.5;ctx.strokeStyle=o===1?'#38557a':o===2?'#6e2420':'#555';ctx.stroke();
+    ctx.font=(c.cap?'bold 12px':'11px')+' serif';ctx.fillStyle='#2b2418';ctx.strokeStyle='rgba(222,212,178,.9)';ctx.lineWidth=3;
+    ctx.strokeText((c.cap?'★ ':'')+c.n,cx+6,cy+4);ctx.fillText((c.cap?'★ ':'')+c.n,cx+6,cy+4);
+  }
+  for(const b of bases){
+    const bx=view.ox+(b.x+0.5)*s,by=view.oy+(b.y+0.5)*s,col=b.o===1?'#38557a':'#6e2420',z=Math.max(5,s*2.2);
+    if(b.o===human&&b.prog>=1&&b.t==='base'){ctx.save();ctx.setLineDash([3,4]);ctx.strokeStyle='rgba(43,36,24,.35)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(bx,by,BASE_R*s,0,7);ctx.stroke();ctx.restore();}
+    ctx.save();ctx.translate(bx,by);
+    ctx.fillStyle=b.prog>=1?col:'rgba(214,204,170,.92)';ctx.strokeStyle='#2b2418';ctx.lineWidth=1.5;
+    if(b.prog<1)ctx.setLineDash([2,2]);
+    ctx.fillRect(-z,-z,2*z,2*z);ctx.strokeRect(-z,-z,2*z,2*z);ctx.setLineDash([]);
+    ctx.strokeStyle='#d6ccaa';ctx.fillStyle='#d6ccaa';ctx.beginPath();
+    if(b.t==='missile'){ctx.moveTo(0,-z*.8);ctx.lineTo(z*.4,z*.5);ctx.lineTo(-z*.4,z*.5);ctx.closePath();ctx.fill();if(b.cd<=0&&b.prog>=1){ctx.strokeStyle='#ffd27a';ctx.strokeRect(-z-2,-z-2,2*z+4,2*z+4);}}
+    else if(b.t==='plant'){ctx.moveTo(z*.2,-z*.8);ctx.lineTo(-z*.4,z*.1);ctx.lineTo(0,z*.1);ctx.lineTo(-z*.2,z*.8);ctx.lineTo(z*.4,-z*.1);ctx.lineTo(0,-z*.1);ctx.closePath();ctx.fill();}
+    else{ctx.moveTo(-z*.6,z*.6);ctx.lineTo(0,-z*.7);ctx.lineTo(z*.6,z*.6);ctx.stroke();}
+    ctx.restore();
+    const bw=z*2.4;ctx.fillStyle='rgba(30,26,18,.7)';ctx.fillRect(bx-bw/2,by+z+2,bw,3);
+    ctx.fillStyle=b.prog<1?'#c9b46a':(b.hp>50?'#a9c48a':'#d98a7a');ctx.fillRect(bx-bw/2,by+z+2,bw*(b.prog<1?b.prog:b.hp/100),3);
+  }
+  for(const q of shots){const f=q.t/q.dur,x0=view.ox+(q.fx+.5)*s,y0=view.oy+(q.fy+.5)*s,x1=view.ox+(q.tx+.5)*s,y1=view.oy+(q.ty+.5)*s,cx=x0+(x1-x0)*f,cy=y0+(y1-y0)*f;
+    ctx.strokeStyle='rgba(230,200,120,.65)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(cx,cy);ctx.stroke();
+    ctx.fillStyle='#fff3c0';ctx.beginPath();ctx.arc(cx,cy,3,0,7);ctx.fill();
+    ctx.strokeStyle='rgba(180,40,30,.8)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x1,y1,BLAST*s*.5+4,0,7);ctx.stroke();}
+  for(const q of blasts){const x=view.ox+(q.x+.5)*s,y=view.oy+(q.y+.5)*s,r=BLAST*s*(1.3-q.l*.5);ctx.fillStyle=`rgba(255,${(150*q.l)|0},40,${q.l*.55})`;ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();}
+  const pulse=(Math.sin(ts/200)+1)/2;
+  for(const a of attacks){
+    if(!a.focus)continue;
+    const fx=view.ox+(a.focus[0]+0.5)*s,fy=view.oy+(a.focus[1]+0.5)*s;
+    ctx.beginPath();ctx.arc(fx,fy,6+pulse*5,0,7);ctx.strokeStyle=a.a===1?'#2d4663':'#6e1f1b';ctx.lineWidth=2;ctx.stroke();
+  }
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.l-=dt/700;
+    if(p.l<=0){particles.splice(i,1);continue;}
+    ctx.fillStyle=`rgba(${(120+80*p.l)|0},${(70+50*p.l)|0},30,${p.l*0.85})`;
+    const r=Math.max(1.5,s*(1.4-p.l*0.4));
+    ctx.fillRect(view.ox+(p.x+0.5)*s-r/2,view.oy+(p.y+0.5)*s-r/2,r,r);
+  }
+}
+function resize(){
+  const wrap=$('wrap'),cv=$('cv'),dpr=window.devicePixelRatio||1;
+  cw=wrap.clientWidth;ch=wrap.clientHeight;
+  cv.width=cw*dpr;cv.height=ch*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+  const f=Math.min(cw/W,ch/H)*0.96;
+  const wasFit=Math.abs(view.s-view.fit)<1e-6;
+  view.fit=f;
+  if(wasFit||view.s<f*0.7){view.s=f;view.ox=(cw-W*f)/2;view.oy=(ch-H*f)/2;}
+}
+function drawBadge(){
+  const c=$('badge'),g=c.getContext('2d');g.clearRect(0,0,46,46);
+  const cx=23,cy=23,r=19;
+  if(human===1){
+    g.save();g.beginPath();g.arc(cx,cy,r,0,7);g.clip();
+    const cols=['#9a3530','#3d5f8f','#bfa24a'];
+    for(let i=0;i<3;i++){const a=i*2*Math.PI/3-Math.PI/2;g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,r,a,a+2*Math.PI/3);g.closePath();g.fillStyle=cols[i];g.fill();}
+    for(let i=0;i<3;i++){const a=i*2*Math.PI/3-Math.PI/2;g.beginPath();g.arc(cx+Math.cos(a)*r/2,cy+Math.sin(a)*r/2,r/2,0,7);g.fillStyle=cols[i];g.fill();}
+    g.restore();
+  }else{
+    g.fillStyle='#8c2a26';g.fillRect(4,8,38,30);
+    g.fillStyle='#fff';g.beginPath();g.arc(23,23,8,0,7);g.fill();
+    g.fillStyle='#8c2a26';g.beginPath();
+    for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?3.2:7;g.lineTo(23+Math.cos(a)*rr,23+Math.sin(a)*rr);}
+    g.closePath();g.fill();
+  }
+}
+
+/* ===================== HUD ===================== */
+function setBad(id,b){$(id).classList.toggle('bad',!!b);}
+function updateHUD(){
+  if(!P[1])return;
+  updateBaseInfo();
+  const p=P[human],e=P[ai],tt=totalTroops(p),cap=p.pop*0.06;
+  $('sPop').textContent=fmt(p.pop/10)+'만 명';
+  $('sPopR').textContent=`${p.dPop>=0?'+':''}${(p.dPop*100).toFixed(0)}명/초 · 징집 ${(p.draft*100)|0}%`;
+  $('sTroop').textContent=(p.troops/10).toFixed(1)+'만 명';
+  $('sTroopR').textContent=`진격 중 ${((tt-p.troops)/10).toFixed(1)}만 · 한도 ${(cap/10).toFixed(1)}만`;
+  $('sFood').textContent=fmt(p.food);
+  $('sFoodR').textContent=p.starving?'기근 발생!':sgn(p.rF);
+  $('sMun').textContent=fmt(p.mun);
+  $('sMunR').textContent=sgn(p.rM);
+  $('sDev').textContent=p.avgDev.toFixed(1)+'%';
+  $('sDevR').textContent=`최악 지역 ${p.maxDev.toFixed(0)}% · 생산력 ${Math.max(0,100-p.avgDev).toFixed(0)}%`;
+  setBad('stFood',p.starving||p.rF<0&&p.food<300);setBad('stMun',p.mun<30);setBad('stDev',p.avgDev>35);setBad('stPop',p.pop<p.popBase*0.5);setBad('stTroop',tt>cap);
+  const total=P[1].tiles+P[2].tiles||1;
+  $('bS').style.width=(P[1].tiles/total*100)+'%';$('bN').style.width=(P[2].tiles/total*100)+'%';
+  $('vRatioN').textContent=`(≈ ${(p.troops*$('rRatio').value/1000).toFixed(1)}만 명)`;
+  const ea=attacks.filter(a=>a.a===ai).reduce((s,a)=>s+a.troops,0);
+  $('enemy').innerHTML=`<b style="color:${ai===1?'#9db6d4':'#d98a7a'}">${e.short}군</b><br>`+
+   `영토: ${fmt(e.tiles)}칸 (${(e.tiles/total*100).toFixed(1)}%)<br>`+
+   `인구: ${fmt(e.pop/10)}만 명<br>병력: ${((e.troops+ea)/10).toFixed(1)}만 명${ea>1?` (진격 ${(ea/10).toFixed(1)}만)`:''}<br>`+
+   `식량: ${fmt(e.food)} ${e.starving?'<span class="bad">(기근)</span>':''}<br>군수: ${fmt(e.mun)}<br>황폐도: ${e.avgDev.toFixed(1)}%<br>`+
+   `<hr style="border-color:#243244"><b>아군 영토</b>: ${fmt(p.tiles)}칸 (${(p.tiles/total*100).toFixed(1)}%)`;
+}
+
+/* ===================== 입력 ===================== */
+function toTile(mx,my){return[Math.floor((mx-view.ox)/view.s),Math.floor((my-view.oy)/view.s)];}
+const cvEl=$('cv');let drag=null;
+cvEl.addEventListener('wheel',e=>{e.preventDefault();const r=cvEl.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;const k=e.deltaY<0?1.15:1/1.15;const ns=Math.max(view.fit*0.7,Math.min(view.fit*8,view.s*k));view.ox=mx-(mx-view.ox)*ns/view.s;view.oy=my-(my-view.oy)*ns/view.s;view.s=ns;},{passive:false});
+cvEl.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,ox:view.ox,oy:view.oy,moved:false};cvEl.setPointerCapture(e.pointerId);});
+cvEl.addEventListener('pointermove',e=>{
+  const r=cvEl.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+  if(drag){const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>5)drag.moved=true;if(drag.moved){view.ox=drag.ox+dx;view.oy=drag.oy+dy;}}
+  const [tx,ty]=toTile(mx,my),tip=$('tip');
+  if(tx>=0&&ty>=0&&tx<W&&ty<H&&land[ty*W+tx]&&P[1]){
+    const i=ty*W+tx,o=owner[i],ci=cityAt[i];
+    tip.style.display='block';tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY+14)+'px';
+    const bb=bases.find(q=>Math.hypot(q.x-tx,q.y-ty)<2.5);tip.innerHTML=`${ci>=0?'<b>'+CITIES[ci].n+'</b> · ':''}${o?P[o].short:'초토화 지대'}${terr[i]?' · 산악':''} · 황폐도 ${dev[blk[i]].toFixed(0)}%`+(bb?` · <b>${bb.prog<1?NAME[bb.t]+' 공사 '+(bb.prog*100|0)+'%':NAME[bb.t]+' (내구 '+(bb.hp|0)+')'}</b>`:'')+(buildMode&&o===human?`<br>건설비: 군수 ${fmt(baseCost(i,buildType).mun)} 식량 ${fmt(baseCost(i,buildType).food)}`:'');
+  }else tip.style.display='none';
+});
+cvEl.addEventListener('pointerup',e=>{
+  const d=drag;drag=null;
+  if(!d||d.moved||!running||over||paused)return;
+  const r=cvEl.getBoundingClientRect(),[tx,ty]=toTile(e.clientX-r.left,e.clientY-r.top);
+  if(tx<0||ty<0||tx>=W||ty>=H)return;
+  const i=ty*W+tx;
+  if(buildMode){if(buildBase(human,tx,ty,false,buildType))setBuild(false);return;}if(strikeMode){manualStrike(tx,ty);return;}
+  if(!land[i]||owner[i]!==ai){pushLog('적 영토를 클릭해야 공격할 수 있다.','info');return;}
+  launchAttack(human,ai,P[human].troops*$('rRatio').value/100,[tx,ty]);
+});
+cvEl.addEventListener('pointerleave',()=>{$('tip').style.display='none';});
+$('rRatio').oninput=()=>{$('vRatio').textContent=$('rRatio').value;};
+$('rDraft').oninput=()=>{const v=+$('rDraft').value;$('vDraft').textContent=v;if(P[human])P[human].draft=v/100;};
+$('bRetreat').onclick=()=>{if(over)return;let n=0;for(const a of attacks.slice())if(a.a===human){endAttack(a,0.85);n++;}pushLog(n?'전군 후퇴 명령! (병력 15% 손실)':'후퇴할 부대가 없다.','info');};
+$('bMobil').onclick=()=>{const p=P[human];p.mobil=!p.mobil;$('bMobil').classList.toggle('on',p.mobil);pushLog(p.mobil?'총동원령 선포: 생산·징집 증가, 인구 서서히 감소.':'총동원령 해제.','info');};
+$('bBuild').onclick=()=>{if(!over)setBuild(!(buildMode&&buildType==='base'),'base');};
+$('bMissile').onclick=()=>{if(!over)setBuild(!(buildMode&&buildType==='missile'),'missile');};
+$('bPlant').onclick=()=>{if(!over)setBuild(!(buildMode&&buildType==='plant'),'plant');};
+$('bStrike').onclick=()=>{if(!over)setStrike(!strikeMode);};
+$('bAuto').onclick=()=>{autoFire=!autoFire;$('bAuto').classList.toggle('on',autoFire);$('bAuto').textContent='자동사격 '+(autoFire?'ON':'OFF');};
+$('bRation').onclick=()=>{const p=P[human];p.ration=!p.ration;$('bRation').classList.toggle('on',p.ration);pushLog(p.ration?'배급제 시행: 식량 소비 감소, 노동력 저하.':'배급제 해제.','info');};
+function setPause(v){paused=v;$('bPause').textContent=paused?'재개':'일시정지';}
+$('bPause').onclick=()=>setPause(!paused);
+document.querySelectorAll('.sp').forEach(b=>b.onclick=()=>{speed=+b.dataset.s;document.querySelectorAll('.sp').forEach(x=>x.classList.toggle('on',x===b));});
+document.addEventListener('keydown',e=>{if(running&&!over){if(e.code==='KeyB')setBuild(!(buildMode&&buildType==='base'),'base');if(e.code==='KeyM')setBuild(!(buildMode&&buildType==='missile'),'missile');if(e.code==='KeyP')setBuild(!(buildMode&&buildType==='plant'),'plant');if(e.code==='KeyF')setStrike(!strikeMode);if(e.code==='Escape'){if(buildMode)setBuild(false);setStrike(false);}}if(e.code==='Space'&&running){e.preventDefault();setPause(!paused);}});
+function startGame(side){newGame(side,$('diff').value);$('start').style.display='none';running=true;resize();}
+$('pickS').onclick=()=>startGame(1);
+$('pickN').onclick=()=>startGame(2);
+
+/* ===================== 메인 루프 ===================== */
+let last=performance.now(),acc=0,hudT=0;
+function frame(ts){
+  const dt=Math.min(250,ts-last);last=ts;
+  if(running&&!paused&&!over){acc+=dt*speed;let n=0;while(acc>=100&&n<40){acc-=100;step();n++;if(over)break;}if(acc>1000)acc=0;}
+  hudT+=dt;if(hudT>200){hudT=0;updateHUD();}
+  render(ts);
+  requestAnimationFrame(frame);
+}
+buildMap();
+newGame(1,'normal');
+window.addEventListener('resize',resize);
+resize();
+view.s=view.fit;view.ox=(cw-W*view.s)/2;view.oy=(ch-H*view.s)/2;
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
